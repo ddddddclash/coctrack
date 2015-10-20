@@ -1,0 +1,191 @@
+<?php
+include_once("galleryImage.class.php");
+include_once("gallery_settings.inc.php");
+
+
+class Gallery {
+	var $current_dir;
+	var $total_images;
+	var $visible_images;
+	var $current_image;
+	var $prev_image;
+	var $next_image;
+	var $thumb_w = 150;		//int Thumbnail width
+	var	$thumb_h = 100;		//int Thumbnail height
+	var $maintain_ratio;	//bool Maintain Aspect Ratio
+	var $_images;			//array of galleryImage objects
+	var $_dirs;				//array of directorys
+	var $_pages;			//3 dimentional array of images relating images to tables on pages.
+	var $_imageTool;
+	var $verbose = false;
+	
+	/*
+ 	 * Gallery Constructor function 
+ 	 */
+	function Gallery($imageTool,$verbose, $cur_dir = 0){
+		$this->verbose = $verbose;
+		$this->current_dir = $cur_dir;
+		$this->_imageTool = $imageTool;
+		$this->loadDir();
+		$this->getImages();
+	}
+	
+	function getDirName($dir=-1){
+		if ($dir == -1) $dir = $this->current_dir;
+		return subStr($this->_dirs[$dir],0,strlen($this->_dirs[$dir])-1);
+	}
+	
+	function setImage($id){
+		$this->current_image = $id;
+		$this->prev_image = $id-1;
+		$this->next_image = $id+1;
+	}
+	
+	
+	function getPrevImage(){
+		if ($this->prev_image >= 0){
+			return $this->_images[$this->prev_image]->getThumbnail($this->thumb_w,$this->thumb_h);
+		}
+		return false;
+	}
+	function getImage(){
+		return $this->_images[$this->current_image];
+	}
+	function getNextImage(){
+		if ($this->next_image < count($this->_images)){
+			return $this->_images[$this->next_image]->getThumbnail($this->thumb_w,$this->thumb_h);
+		}
+		return false;
+	}
+	
+	function getDirs(){
+		return $this->_dirs;
+	}
+	
+	/*
+	 * read image names from a directory 
+	 */
+	function loadDir() {	
+		$dir = IMAGE_PATH . $this->_dirs[$this->current_dir];
+		//_dirs has to be reset to prevent problems created by refreshing the page.
+		$this->_dirs = null;					
+		if (is_dir($dir)) {
+			if ($dh = opendir($dir)) {
+				while (($file = readdir($dh))) {
+					if(is_dir($dir.$file) && $file != '.' && $file != '..') {
+						$this->_dirs[] = $file."/";
+					}
+	        	}
+	        	closedir($dh);
+	    	}
+			return false;
+		}
+		return false;
+	}
+	/*
+ 	 * read image names from a directory 
+ 	 */
+	function getImages() {
+		$dir = $this->_dirs[$this->current_dir];
+		$temps = IMAGE_PATH . $dir;
+		if($this->verbose) echo "$temps <br>";
+		//_images has to be reset to prevent problems created by refreshing the page.
+		$this->_images = null;					
+		
+		if (is_dir($temps)) {
+	    	if ($dh = opendir($temps)) {
+	        	while (($file = readdir($dh))) {
+					if(is_file($temps.$file)) {
+						if (preg_match("/\.jp(g|eg)$/i",$file)) {
+						  $type = "jpeg";
+						} elseif (preg_match("/\.gif$/i",$file)) {
+						  $type = "gif";
+						} elseif (preg_match("/\.png$/i",$file)) {
+						  $type = "png";
+						}
+						if ($type){
+							$s = sizeof($this->_images);
+							$this->_images[] = new GalleryImage(IMAGE_PATH,$dir,$file,$type,DESC_DIR);
+							$this->_images[$s]->setImageTool($this->_imageTool);
+						}
+						$type = "";
+					}
+	        	}
+	        	closedir($dh);
+	    	}
+		}
+	}
+	
+	function makePages($cols, $rows){
+		$p = 0;
+		$r = 0;
+		$c = 0;
+		for ($i=0; $i<sizeof($this->_images); $i++){
+			$this->_pages[$p][$r][$c] = $this->_images[$i];
+			if ($c++ >= $cols-1){
+				$c = 0;
+				if ($r++ >= $rows-1){
+					$r = 0;
+					$p++;
+				}
+			}
+		}
+	}
+	
+	function pageLinks($current_page,$link){
+		$current_page--;
+		$output = "";
+		for ($i=0; $i<count($this->_pages);$i++){
+			$page = $i+1;
+			eval("\$temps = \"$link\";");
+			$output .= $temps;
+		}
+		return $output;
+	}
+	
+	function findImageKey($img_name){
+		for ($i=0; $i < count($this->_images); $i++){
+			if ($this->_images[$i]->getFilename() == $img_name)
+				return $i;
+		}
+		return false;
+	}
+	
+	function showPage($page){
+		$page = $page-1;
+		$a = $this->_pages[$page];
+		$d = $this->current_dir;
+		
+		echo "<table cellpadding='10' width='100%'>";
+		for ($j=0;$j<count($a);$j++){
+			echo "<tr>";
+			for ($k=0;$k<count($a[$j]);$k++){
+				$img = $a[$j][$k]->getThumbnail($this->thumb_w,$this->thumb_h);
+				$file = $a[$j][$k]->getFilename();
+				$link = $a[$j][$k]->getLink();
+				$size = $a[$j][$k]->getSize();
+				$img_id = $this->findImageKey($file);
+				echo "<td align='center'>
+				<table border='0' cellpadding='0' cellspacing='0' >
+				<tr><td background='images/thumb_back.gif' width='164' height='131'>
+				<div style='position:relative;left:15px;top:2px;'>
+				<a href='view.php?dir=$d&img_id=$img_id'><img src='$img' border='0'></a>
+				</div>
+				</td></tr>
+				</table>
+				</td>
+				";
+			}
+			echo"</tr>";
+		}
+		echo "</table><br>";
+	}
+	
+	
+	
+}
+
+
+
+
+?>
